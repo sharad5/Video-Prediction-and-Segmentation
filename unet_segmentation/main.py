@@ -287,7 +287,7 @@ if __name__ == "__main__":
 
                 if (i+1)%5 == 0:
                     wandb.log(
-                       {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, mask={
+                       {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, masks={
                                f'pred_masks_epoch_{epoch}_step_{i}': 
                                    {"pred_masks":preds, "class_labels":class_labels},
                               f'true_masks_epoch_{epoch}_step_{i}':
