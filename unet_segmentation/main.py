@@ -173,12 +173,12 @@ def batch_iou_pytorch(SMOOTH, outputs: torch.Tensor, labels: torch.Tensor):
 # Press the green button in the gutter to run the script.
 if __name__ == "__main__":
 
-    # cfg = {
-    # "train": {"learning_rate":1e-4, "epochs":1}
+    cfg = {
+    "train": {"learning_rate":1e-4, "epochs":1}
 
-    # }
+    }
 
-    # wandb.init(project='unet-seg', config=cfg)
+    wandb.init(project='unet-seg', config=cfg)
 
     train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
     val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
@@ -215,6 +215,7 @@ if __name__ == "__main__":
     # Train loop
     for epoch in range(num_epochs):
         loop = tqdm(train_dataloader)
+        train_epoch_loss = 0
         for idx, (data, targets) in enumerate(loop):
             data = data.permute(0, 3, 1, 2).to(torch.float16).to(DEVICE)
             targets = targets.to(DEVICE)
@@ -223,6 +224,7 @@ if __name__ == "__main__":
             with torch.cuda.amp.autocast():
                 predictions = model(data)
                 loss = loss_fn(predictions, targets)
+                
 
             # backward
             optimizer.zero_grad()
@@ -232,7 +234,13 @@ if __name__ == "__main__":
 
             # update tqdm loop
             loop.set_postfix(loss=loss.item())
-
+            train_epoch_loss += loss.item()
+        
+        wandb.log(
+            {
+                f'train_epoch_loss': train_epoch_loss/len(train_dataloader)
+            }
+        )
         val_losses = 0
         last_val_loss = 1000000
         model.eval()
@@ -255,23 +263,24 @@ if __name__ == "__main__":
                 # vloss = loss_fn(preds, y)
                 val_losses += vloss.item()
 
-                # wandb.log({f'val_loss_epoch_{epoch}':vloss})
+                
                 # class_labels = {}
 
-                # if (i+1)%5 == 0:
-                #    wandb.log(
-                #        {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, mask={
-                #                f'pred_masks_epoch_{epoch}_step_{i}': 
-                #                    {"pred_masks":preds, "class_labels":class_labels},
-                #               f'true_masks_epoch_{epoch}_step_{i}':
-                #                    {"true_masks":y, "class_labels":class_labels}
-                #            }) 
-                #        })
+                if (i+1)%5 == 0:
+                    wandb.log(
+                       {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, mask={
+                               f'pred_masks_epoch_{epoch}_step_{i}': 
+                                   {"pred_masks":preds, "class_labels":class_labels},
+                              f'true_masks_epoch_{epoch}_step_{i}':
+                                   {"true_masks":y, "class_labels":class_labels}
+                           }) 
+                       })
                 preds_arg = torch.argmax(softmax(preds), axis=1)
 
                 thresholded_iou = batch_iou_pytorch(SMOOTH, preds_arg, y)
                 ious += thresholded_iou
-
+                
+            wandb.log({f'val_loss_epoch':val_losses/len(val_dataloader)})
             mean_thresholded_iou = ious / len(val_dataloader)
             avg_val_loss = val_losses / len(val_dataloader)
             print(f"Epoch: {epoch}, avg IoU: {mean_thresholded_iou}, avg val loss: {avg_val_loss}")
