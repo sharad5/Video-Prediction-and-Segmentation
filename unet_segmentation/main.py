@@ -7,8 +7,17 @@ from PIL import Image
 import torch.nn as nn
 from torch.optim import Adam
 from tqdm import tqdm
-#import wandb
+import wandb
+import argparse
 
+def create_parser():
+    parser = argparse.ArgumentParser()
+    # Set-up parameters
+    parser.add_argument('--device', default='cuda', type=str, help='Name of device to use for tensor computations (cuda/cpu)')
+    parser.add_argument('--use_gpu', default=True, type=bool)
+    parser.add_argument('--gpu', default='0', type=str)
+
+    return parser
 
 class SegmentationDataSet(Dataset):
 
@@ -113,7 +122,7 @@ def check_accuracy(loader, model):
     num_pixels = 0
     dice_score = 0
     model.eval()
-    jaccard = torchmetrics.JaccardIndex(task="multiclass", num_classes=49).to(DEVICE)
+    jaccard = torchmetrics.JaccardIndex(task="multiclass", num_classes=49).to(device)
     # print(model)
     y_preds_list = []
     y_trues_list = []
@@ -122,8 +131,8 @@ def check_accuracy(loader, model):
         for x, y in tqdm(loader):
             # print(x.shape)
             # plt.imshow(x.cpu()[0])
-            x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(DEVICE)
-            y = y.to(DEVICE)
+            x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(device)
+            y = y.to(device)
             softmax = nn.Softmax(dim=1)
             preds = torch.argmax(softmax(model(x)), axis=1)
 
@@ -179,6 +188,8 @@ if __name__ == "__main__":
     # }
 
     # wandb.init(project='unet-seg', config=cfg)
+    args = create_parser().parse_args()
+    # device = args.device
 
     train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
     val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
@@ -191,9 +202,20 @@ if __name__ == "__main__":
     val_dataset = SegmentationDataSet(val_data_dir, None)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=True)
 
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    # if args.use_gpu:
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    device = torch.device('cuda')
+    print('Use GPU {}:'.format(args.gpu))
 
-    model = unet_model().to(DEVICE)
+    # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = unet_model()
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)  # , device_ids=None will take in all available devices
+        print(f"Using {torch.cuda.device_count()} GPUs!")
+
+    model.to(device)
+
     best_model = None
     # summary(model, (3, 256, 256))
 
@@ -216,8 +238,8 @@ if __name__ == "__main__":
     for epoch in range(num_epochs):
         loop = tqdm(train_dataloader)
         for idx, (data, targets) in enumerate(loop):
-            data = data.permute(0, 3, 1, 2).to(torch.float16).to(DEVICE)
-            targets = targets.to(DEVICE)
+            data = data.permute(0, 3, 1, 2).to(torch.float16).to(device)
+            targets = targets.to(device)
             targets = targets.type(torch.long)
             # forward
             with torch.cuda.amp.autocast():
@@ -243,8 +265,8 @@ if __name__ == "__main__":
 
         with torch.no_grad():
             for i, (x, y) in enumerate(tqdm(val_dataloader)):
-                x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(DEVICE)
-                y = y.to(DEVICE)
+                x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(device)
+                y = y.to(device)
                 y = y.type(torch.long)
                 # forward
                 with torch.cuda.amp.autocast():
