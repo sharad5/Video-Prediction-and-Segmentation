@@ -24,9 +24,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 model = unet_model().to(DEVICE)
 m = torch.load(unet_model_saved_path).state_dict()
-model.load_state_dict(m)
+model.load_state_dict(m,strict=False)
 
-jaccard = torchmetrics.JaccardIndex(task="multiclass", num_classes=49)
+jaccard = torchmetrics.JaccardIndex(task="multiclass", num_classes=49).to(DEVICE)
 
 
 y_preds_concat = None
@@ -45,8 +45,6 @@ def evaluate_jaccard_index(loader, model):
     with torch.no_grad():
         for x, y in tqdm(loader):
             x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(DEVICE)
-            print(x.shape)
-            break
             y = y.to(DEVICE)
             softmax = nn.Softmax(dim=1)
             preds = torch.argmax(softmax(model(x)), axis=1)
@@ -62,8 +60,8 @@ def evaluate_jaccard_index(loader, model):
     y_preds_concat = torch.cat(y_preds_list, dim=0)
     y_trues_concat = torch.cat(y_trues_list, dim=0)
 
-    print(len(y_preds_list))
-    print(y_preds_concat.shape)
+    # print(len(y_preds_list))
+    # print(y_preds_concat.shape)
 
     jac_idx = jaccard(y_trues_concat, y_preds_concat)
 
@@ -71,7 +69,7 @@ def evaluate_jaccard_index(loader, model):
 
     print(f"Got {num_correct}/{num_pixels} with acc {num_correct / num_pixels * 100:.2f}")
     print(f"Dice score: {dice_score / len(loader)}")
-    model.train()
+    # model.train()
 
 val_data_subset = torch.utils.data.Subset(val_dataset, range(1000))
 val_data_subset_loader = torch.utils.data.DataLoader(val_data_subset, batch_size=1, shuffle=True)
