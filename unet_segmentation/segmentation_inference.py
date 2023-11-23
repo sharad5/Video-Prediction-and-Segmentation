@@ -60,8 +60,8 @@ def evaluate_jaccard_index(loader, model):
     y_preds_concat = torch.cat(y_preds_list, dim=0)
     y_trues_concat = torch.cat(y_trues_list, dim=0)
 
-    print(len(y_preds_list))
-    print(y_preds_concat.shape)
+    # print(len(y_preds_list))
+    # print(y_preds_concat.shape)
 
     jac_idx = jaccard(y_trues_concat, y_preds_concat)
 
