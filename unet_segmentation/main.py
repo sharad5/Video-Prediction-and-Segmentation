@@ -26,9 +26,9 @@ class SegmentationDataSet(Dataset):
         self.images, self.masks = [], []
         for i in video_dir:
             imgs = os.listdir(i)
-            self.images.extend([i + '/' + img for img in imgs if not img.startswith(
-                'mask')])  # /content/gdrive/MyDrive/Dataset_Studentnew/Dataset_Student/train/video_
-        # print(self.images[1000])
+            imgs_in_video_dir = [i + '/' + img for img in imgs if not img.startswith('mask')]
+#             self.images.extend(np.random.choice(imgs_in_video_dir, 3))
+            self.images.extend(imgs_in_video_dir)
 
     def __len__(self):
         return len(self.images)
@@ -52,15 +52,17 @@ class SegmentationDataSet(Dataset):
 
 
 class encoding_block(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout):
         super(encoding_block, self).__init__()
         model = []
         model.append(nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=False))
         model.append(nn.BatchNorm2d(out_channels))
         model.append(nn.ReLU(inplace=True))
+        model.append(nn.Dropout(dropout))
         model.append(nn.Conv2d(out_channels, out_channels, 3, 1, 1, bias=False))
         model.append(nn.BatchNorm2d(out_channels))
         model.append(nn.ReLU(inplace=True))
+        model.append(nn.Dropout(dropout))
         self.conv = nn.Sequential(*model)
 
     def forward(self, x):
@@ -70,20 +72,21 @@ class encoding_block(nn.Module):
 class unet_model(nn.Module):
     def __init__(self, out_channels=49, features=[64, 128, 256, 512]):
         super(unet_model, self).__init__()
+        dropout=0
         self.pool = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
-        self.conv1 = encoding_block(3, features[0])
-        self.conv2 = encoding_block(features[0], features[1])
-        self.conv3 = encoding_block(features[1], features[2])
-        self.conv4 = encoding_block(features[2], features[3])
-        self.conv5 = encoding_block(features[3] * 2, features[3])
-        self.conv6 = encoding_block(features[3], features[2])
-        self.conv7 = encoding_block(features[2], features[1])
-        self.conv8 = encoding_block(features[1], features[0])
+        self.conv1 = encoding_block(3, features[0], dropout)
+        self.conv2 = encoding_block(features[0], features[1], dropout)
+        self.conv3 = encoding_block(features[1], features[2], dropout)
+        self.conv4 = encoding_block(features[2], features[3], dropout)
+        self.conv5 = encoding_block(features[3] * 2, features[3], dropout)
+        self.conv6 = encoding_block(features[3], features[2], dropout)
+        self.conv7 = encoding_block(features[2], features[1], dropout)
+        self.conv8 = encoding_block(features[1], features[0], 0)
         self.tconv1 = nn.ConvTranspose2d(features[-1] * 2, features[-1], kernel_size=2, stride=2)
         self.tconv2 = nn.ConvTranspose2d(features[-1], features[-2], kernel_size=2, stride=2)
         self.tconv3 = nn.ConvTranspose2d(features[-2], features[-3], kernel_size=2, stride=2)
         self.tconv4 = nn.ConvTranspose2d(features[-3], features[-4], kernel_size=2, stride=2)
-        self.bottleneck = encoding_block(features[3], features[3] * 2)
+        self.bottleneck = encoding_block(features[3], features[3] * 2, 0)
         self.final_layer = nn.Conv2d(features[0], out_channels, kernel_size=1)
 
     def forward(self, x):
@@ -181,17 +184,27 @@ def batch_iou_pytorch(SMOOTH, outputs: torch.Tensor, labels: torch.Tensor):
 
 # Press the green button in the gutter to run the script.
 if __name__ == "__main__":
+    # hyperparameters
 
+    LEARNING_RATE = 5e-5
+    weight_decay = 1e-3
+    num_epochs = 15
+    max_patience = 3
+    epochs_no_improve = 0
+    early_stop = False
+    SMOOTH = 1e-6
+    
     cfg = {
-    "train": {"learning_rate":1e-4, "epochs":1}
+    "train": {"learning_rate":LEARNING_RATE, "epochs":num_epochs}
 
     }
 
     wandb.init(project='unet-seg', config=cfg)
     args = create_parser().parse_args()
 
-    train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
-    val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
+    train_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/train/video_' #Change this to your train set path
+    val_set_path = '/scratch//sd5251/DL/Project/clevrer1/dataset/val/video_' #Change this to your validation path
+    unet_model_saved_path='/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/unet_segmentation/unet_10.pt'
 
     train_data_dir = [train_set_path + str(i) for i in range(0, 1000)]
     train_dataset = SegmentationDataSet(train_data_dir, None)
@@ -208,6 +221,8 @@ if __name__ == "__main__":
     # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = unet_model()
+    model.load_state_dict(torch.load(unet_model_saved_path).state_dict(),strict=False)
+    
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)  # , device_ids=None will take in all available devices
         print(f"Using {torch.cuda.device_count()} GPUs!")
@@ -216,19 +231,15 @@ if __name__ == "__main__":
     best_model = None
     # summary(model, (3, 256, 256))
 
-    # hyperparameters
-
-    LEARNING_RATE = 1e-4
-    num_epochs = 10
-    max_patience = 3
-    epochs_no_improve = 0
-    early_stop = False
-    SMOOTH = 1e-6
+    
 
     # loss criterion, optimizer
 
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+#     loss_fn = nn.CrossEntropyLoss()
+    weights = [0.00132979]+[1]*48 # Downweighting the class 0 because it is ~94% of the classes
+    class_weights = torch.FloatTensor(weights).to(device)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer = Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
     scaler = torch.cuda.amp.GradScaler()
 
     # Train loop
