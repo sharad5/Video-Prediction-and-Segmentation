@@ -63,7 +63,7 @@ def evaluate_jaccard_index(loader, model):
     # print(len(y_preds_list))
     # print(y_preds_concat.shape)
 
-    jac_idx = jaccard(y_trues_concat, y_preds_concat)
+    jac_idx = jaccard(y_trues_concat, y_trues_concat)
 
     print(f"Jaccard Index {jac_idx}")
 
