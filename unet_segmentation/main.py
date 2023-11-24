@@ -195,16 +195,16 @@ if __name__ == "__main__":
     SMOOTH = 1e-6
     
     cfg = {
-    "train": {"learning_rate":LEARNING_RATE, "epochs":num_epochs}
+    "train": {"learning_rate":LEARNING_RATE, "epochs":num_epochs, "weight_decay":weight_decay}
 
     }
 
     wandb.init(project='unet-seg', config=cfg)
     args = create_parser().parse_args()
 
-    train_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/train/video_' #Change this to your train set path
-    val_set_path = '/scratch//sd5251/DL/Project/clevrer1/dataset/val/video_' #Change this to your validation path
-    unet_model_saved_path='/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/unet_segmentation/unet_10.pt'
+    train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
+    val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
+    unet_model_saved_path='/scratch/cj2407/unet_15.pt'
 
     train_data_dir = [train_set_path + str(i) for i in range(0, 1000)]
     train_dataset = SegmentationDataSet(train_data_dir, None)
@@ -294,17 +294,17 @@ if __name__ == "__main__":
                 val_losses += vloss.item()
 
                 
-                # class_labels = {}
-                #
-                # if (i+1)%5 == 0:
-                #     wandb.log(
-                #        {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, masks={
-                #                f'pred_masks_epoch_{epoch}_step_{i}':
-                #                    {"pred_masks":preds, "class_labels":class_labels},
-                #               f'true_masks_epoch_{epoch}_step_{i}':
-                #                    {"true_masks":y, "class_labels":class_labels}
-                #            })
-                #        })
+                class_labels = {j: "object_" + str(j) if j != 0 else "background" for j in range(49)}
+
+                if (i+1)%5 == 0:
+                    wandb.log(
+                       {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, masks={
+                               f'pred_masks_epoch_{epoch}_step_{i}':
+                                   {"pred_masks":preds, "class_labels":class_labels},
+                              f'true_masks_epoch_{epoch}_step_{i}':
+                                   {"true_masks":y, "class_labels":class_labels}
+                           })
+                       })
                 preds_arg = torch.argmax(softmax(preds), axis=1)
 
                 thresholded_iou = batch_iou_pytorch(SMOOTH, preds_arg, y)
