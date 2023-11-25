@@ -27,8 +27,8 @@ class SegmentationDataSet(Dataset):
         for i in video_dir:
             imgs = os.listdir(i)
             imgs_in_video_dir = [i + '/' + img for img in imgs if not img.startswith('mask')]
-#             self.images.extend(np.random.choice(imgs_in_video_dir, 3))
-            self.images.extend(imgs_in_video_dir)
+            self.images.extend(np.random.choice(imgs_in_video_dir, 2))
+#             self.images.extend(imgs_in_video_dir)
 
     def __len__(self):
         return len(self.images)
@@ -202,9 +202,9 @@ if __name__ == "__main__":
     wandb.init(project='unet-seg', config=cfg)
     args = create_parser().parse_args()
 
-    train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
-    val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
-    unet_model_saved_path='/scratch/cj2407/unet_15.pt'
+    train_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/train/video_' #Change this to your train set path
+    val_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/val/video_' #Change this to your validation path
+    unet_model_saved_path='./unet_10.pt'
 
     train_data_dir = [train_set_path + str(i) for i in range(0, 1000)]
     train_dataset = SegmentationDataSet(train_data_dir, None)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
 
     val_data_dir = [val_set_path + str(i) for i in range(1000, 2000)]
     val_dataset = SegmentationDataSet(val_data_dir, None)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=True)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=False)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     device = torch.device('cuda')
@@ -289,20 +289,21 @@ if __name__ == "__main__":
                     preds = model(data)
                     vloss = loss_fn(preds, y)
 
-                # print(x.shape, y.shape, preds.shape)
+#                 print(x.shape, y[0].shape, torch.argmax(preds, dim=1)[0].shape)
                 # vloss = loss_fn(preds, y)
                 val_losses += vloss.item()
 
                 
                 class_labels = {j: "object_" + str(j) if j != 0 else "background" for j in range(49)}
-
-                if (i+1)%5 == 0:
+                pred_mask_for_log = torch.argmax(preds, dim=1)[0].cpu().detach().numpy()
+                true_mask_for_log = y[0].cpu().detach().numpy()
+                if (i+1)%50 == 0:
                     wandb.log(
-                       {f"image_epoch_{epoch}_step_{i}" : wandb.Image(x, masks={
-                               f'pred_masks_epoch_{epoch}_step_{i}':
-                                   {"pred_masks":preds, "class_labels":class_labels},
-                              f'true_masks_epoch_{epoch}_step_{i}':
-                                   {"true_masks":y, "class_labels":class_labels}
+                       {f"image_{i}" : wandb.Image(x[0], masks={
+                               f'pred_masks':
+                                   {"mask_data":pred_mask_for_log, "class_labels":class_labels},
+                              f'true_masks':
+                                   {"mask_data":true_mask_for_log, "class_labels":class_labels}
                            })
                        })
                 preds_arg = torch.argmax(softmax(preds), axis=1)
