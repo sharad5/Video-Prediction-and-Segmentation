@@ -203,8 +203,8 @@ if __name__ == "__main__":
     wandb.init(project='unet-seg', config=cfg)
     args = create_parser().parse_args()
 
-    train_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/train/video_' #Change this to your train set path
-    val_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/val/video_' #Change this to your validation path
+    train_set_path = '/scratch/cj2407/clevrer/dataset/train/video_' #Change this to your train set path
+    val_set_path = '/scratch/cj2407/clevrer/dataset/val/video_' #Change this to your validation path
     unet_model_saved_path='./unet_10.pt'
 
     train_data_dir = [train_set_path + str(i) for i in range(0, 1000)]
