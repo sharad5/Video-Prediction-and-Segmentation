@@ -9,6 +9,7 @@ from torch.optim import Adam
 from tqdm import tqdm
 import argparse
 import wandb
+import torchvision
 
 def create_parser():
     parser = argparse.ArgumentParser()
@@ -221,7 +222,7 @@ if __name__ == "__main__":
     # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = unet_model()
-    model.load_state_dict(torch.load(unet_model_saved_path).state_dict(),strict=False)
+    #model.load_state_dict(torch.load(unet_model_saved_path).state_dict(),strict=False)
     
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)  # , device_ids=None will take in all available devices
@@ -293,7 +294,6 @@ if __name__ == "__main__":
                 # vloss = loss_fn(preds, y)
                 val_losses += vloss.item()
 
-                
                 class_labels = {j: "object_" + str(j) if j != 0 else "background" for j in range(49)}
                 pred_mask_for_log = torch.argmax(preds, dim=1)[0].cpu().detach().numpy()
                 true_mask_for_log = y[0].cpu().detach().numpy()
@@ -304,21 +304,21 @@ if __name__ == "__main__":
                                    {"mask_data":pred_mask_for_log, "class_labels":class_labels},
                               f'true_masks':
                                    {"mask_data":true_mask_for_log, "class_labels":class_labels}
-                           })
-                       })
+                            })
+                        })
                 preds_arg = torch.argmax(softmax(preds), axis=1)
 
-                thresholded_iou = batch_iou_pytorch(SMOOTH, preds_arg, y)
-                ious += thresholded_iou
+                #thresholded_iou = batch_iou_pytorch(SMOOTH, preds_arg, y)
+                #ious += thresholded_iou
                 
             wandb.log({f'val_loss_epoch':val_losses/len(val_dataloader)})
-            mean_thresholded_iou = ious / len(val_dataloader)
+            #mean_thresholded_iou = ious / len(val_dataloader)
             avg_val_loss = val_losses / len(val_dataloader)
-            print(f"Epoch: {epoch}, avg IoU: {mean_thresholded_iou}, avg val loss: {avg_val_loss}")
+            print(f"Epoch: {epoch}, avg val loss: {avg_val_loss}")
 
         if avg_val_loss < last_val_loss:
             best_model = model
-            torch.save(best_model, 'unet_10.pt')
+            torch.save(best_model, 'unet_15.pt')
             last_val_loss = avg_val_loss
             epochs_no_improve = 0
         else:
