@@ -295,7 +295,7 @@ if __name__ == "__main__":
                 val_losses += vloss.item()
 
                 class_labels = {j: "object_" + str(j) if j != 0 else "background" for j in range(49)}
-                pred_mask_for_log = torch.argmax(preds, dim=1)[0].cpu().detach().numpy()
+                pred_mask_for_log = torch.argmax(softmax(preds), dim=1)[0].cpu().detach().numpy()
                 true_mask_for_log = y[0].cpu().detach().numpy()
                 if (i+1)%50 == 0:
                     wandb.log(
@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
         if avg_val_loss < last_val_loss:
             best_model = model
-            torch.save(best_model, 'unet_15.pt')
+            torch.save(best_model, '/scratch/cj2407/unet_15.pt')
             last_val_loss = avg_val_loss
             epochs_no_improve = 0
         else:
