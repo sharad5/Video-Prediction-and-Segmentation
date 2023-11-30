@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict
 import os.path as osp
 import json
 import torch
@@ -36,7 +37,7 @@ class Inference:
         # seed
         set_seed(self.args.seed)
         # log and checkpoint
-        self.path = osp.join(self.args.res_dir, self.args.ex_name)
+        self.path = self.args.res_dir #osp.join(self.args.res_dir, self.args.ex_name)
         check_dir(self.path)
 
         for handler in logging.root.handlers[:]:
@@ -57,7 +58,10 @@ class Inference:
                            args.hid_T, args.N_S, args.N_T)
         
         if os.path.isfile(self.args.inference_model_checkpoint):
-            self.model.load_state_dict(torch.load(self.args.inference_model_checkpoint))
+            state_dict = torch.load(self.args.inference_model_checkpoint)
+            if "module" in list(state_dict.keys())[0]:
+                state_dict = OrderedDict({".".join(k.split(".")[1:]): v for k,v in state_dict.items()})
+            self.model.load_state_dict(state_dict)
         
         if torch.cuda.device_count() >= 1:
             self.model = torch.nn.DataParallel(self.model) #, device_ids=None will take in all available devices
@@ -69,42 +73,28 @@ class Inference:
         config = self.args.__dict__
         config["data_root"] += "/hidden"
         config["inference"] = True
-        self.hidden_loader, self.data_mean, self.data_std = load_data(**config)
-        #self.vali_loader = self.test_loader if self.vali_loader is None else self.vali_loader
+        self.data_loader = load_data(**config)
 
-    def vali(self, vali_loader):
+    def run(self):
         self.model.eval()
-        preds_lst, trues_lst, total_loss = [], [], []
-        vali_pbar = tqdm(vali_loader)
-        for i, (batch_x, batch_y) in enumerate(vali_pbar):
-#             if i * batch_x.shape[0] > 1000:
-#                 break
-            batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
-            pred_y = self.model(batch_x)
-            list(map(lambda data, lst: lst.append(data.detach().cpu().numpy()), [
-                 pred_y, batch_y], [preds_lst, trues_lst]))
-            
-            #pred_y_norm = pred_y / 255.0
-            #batch_y_norm = batch_y / 255.0
-                
-            loss = self.criterion(pred_y, batch_y)
-            vali_pbar.set_description(
-                'vali loss: {:.4f}'.format(loss.mean().item()))
-            total_loss.append(loss.mean().item())
-
-        total_loss = np.average(total_loss)
-        preds = np.concatenate(preds_lst, axis=0)
-        trues = np.concatenate(trues_lst, axis=0)
-        folder_path = self.path+'/results/inference/preds/'
+        predicted_batches = []
+        pbar = tqdm(self.data_loader)
+        with torch.no_grad():
+            for i, batch_x in enumerate(pbar):
+                batch_x = batch_x.to(self.device)
+                pred_y = self.model(batch_x)
+#                 print(pred_y.shape)
+                predicted_batches.append(pred_y)
+                if i==9:
+                    break
+        predictions = torch.cat(predicted_batches, dim=0)
+        print(predictions.shape)
+        folder_path = self.path+'/inference/'
 
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-
-        mse, mae, ssim, psnr = metric(preds, trues, 0, 1, True)
-        print_log('vali mse:{:.4f}, mae:{:.4f}, ssim:{:.4f}, psnr:{:.4f}'.format(mse, mae, ssim, psnr))
-        for np_data in ['trues', 'preds']:
-            np.save(osp.join(folder_path, np_data + '.npy'), vars()[np_data])
-
-        print({'vali_mse': mse, 'vali_mae': mae, 'vali_ssim': ssim, 'vali_psnr': psnr})
-        return total_loss
+        
+        file_path = os.path.join(folder_path, self.args.inference_file_name)
+        torch.save(predictions, file_path)
+        print(f"Predictions saved to {file_path}")
 

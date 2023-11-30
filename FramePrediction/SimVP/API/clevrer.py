@@ -16,9 +16,9 @@ def extract_num(s):
 def extract_image_num(s):
     return int(s.split('_')[1].split('.')[0])
 
-class ClevrerDataSet(data.Dataset):
+class ClevrerTrainDataSet(data.Dataset):
     def __init__(self, root, is_train=True, n_frames_input=11, n_frames_output=11, transform=None):
-        super(ClevrerDataSet, self).__init__()
+        super(ClevrerTrainDataSet, self).__init__()
 
         self.videos = []
         unlabelled_dirs = os.listdir(root)
@@ -66,9 +66,51 @@ class ClevrerDataSet(data.Dataset):
     def __len__(self):
         return self.length
 
+class ClevrerInferenceDataSet(data.Dataset):
+    def __init__(self, root, n_frames_input=11, transform=None):
+        super(ClevrerInferenceDataSet, self).__init__()
+
+        self.videos = []
+        unlabelled_dirs = os.listdir(root)
+        unlabelled_dirs = sorted(unlabelled_dirs, key=extract_num)
+
+        for video in unlabelled_dirs:
+            self.videos.extend([root + '/' + video + '/'])
+        
+        self.length = len(self.videos)
+        self.n_frames_input = n_frames_input
+        self.transform = transform
+
+    def __getitem__(self, index):
+        length = self.n_frames_input
+        # print(self.videos[index])
+        video_folder = os.listdir(self.videos[index])
+        video_folder = sorted(video_folder, key=extract_image_num)
+        imgs = []
+        for image in video_folder:
+            imgs.append(np.array(Image.open(self.videos[index] + '/' + image)))
+
+        #shape: torch.Size([10, 1, 64, 64])
+        # print(len(imgs))
+
+        past_clips = imgs[0:self.n_frames_input] #[11,160,240,3]
+
+        past_clips = [torch.from_numpy(clip) for clip in past_clips]
+        past_clips = torch.stack(past_clips).permute(0, 3, 1, 2)
+        #we want [11,3,160,240]
+        return (past_clips).contiguous().float()
+    
+    def __len__(self):
+        return self.length
+
+def load_clevrer_inference_data(batch_size, data_root, num_workers):
+    data = ClevrerInferenceDataSet(root=data_root, n_frames_input=11)
+    data_loader = DataLoader(data, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    return data_loader
+
 def load_clevrer(batch_size, val_batch_size,data_root, num_workers):
 
-    whole_data = ClevrerDataSet(root=data_root, is_train=True, n_frames_input=11, n_frames_output=11)
+    whole_data = ClevrerTrainDataSet(root=data_root, is_train=True, n_frames_input=11, n_frames_output=11)
 
     train_size = int(0.9 * len(whole_data))
     val_size = int(0.09 * len(whole_data))

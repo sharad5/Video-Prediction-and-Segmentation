@@ -1,5 +1,6 @@
 import argparse
 from exp import Exp
+from inference import Inference
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -14,7 +15,13 @@ def create_parser():
     parser.add_argument('--use_gpu', default=True, type=bool)
     parser.add_argument('--gpu', default='0', type=str)
     parser.add_argument('--seed', default=1, type=int)
-
+    
+    # Inference Parameters
+    parser.add_argument('--inference', default=False, type=bool)
+    parser.add_argument('--inference_model_checkpoint', default="results/Debug/checkpoint.pth", type=str)
+    parser.add_argument('--inference_data_root', default="/scratch/sd5251/DL/Project/clevrer1/dataset/hidden", type=str)
+    parser.add_argument('--inference_file_name', default="simvp_basic.pt", type=str)
+    
     # dataset parameters
     parser.add_argument('--batch_size', default=4, type=int, help='Batch size')
     parser.add_argument('--val_batch_size', default=4, type=int, help='Batch size')
@@ -38,28 +45,23 @@ def create_parser():
 
 
 
-
-def main_module():
+if __name__ == '__main__':
     args = create_parser().parse_args()
     config = args.__dict__
     print(config)
+    if args.inference:
+        print('Starting Inference')
+        inf = Inference(args)
+        inf.run()
+        print('Inference Completed')
+    else:
+        print('Starting Training')
+        wandb.init(project="video-pred-simvp", config=config)
+        exp = Exp(args, wandb.config)
+        exp.train(args)
+        wandb.finish()
+        print('Training Completed')
 
-    wandb.init(project="video-pred-simvp", config=config)
-
-
-    exp = Exp(args, wandb.config)
-    print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>  start <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-    exp.train(args)
-#     print('>>>>>>>>>>>>>>>>>>>>>>>>>>>> testing <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-
-#     wandb.log({"test_final_mse": mse})
-
-    print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>  end <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-    wandb.finish()
-
-
-if __name__ == '__main__':
-    main_module()
 #     sweep_configuration = {
 #         "method": "random",
 #         "metric": { 
