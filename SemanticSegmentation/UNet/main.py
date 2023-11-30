@@ -238,7 +238,8 @@ if __name__ == "__main__":
 #     loss_fn = nn.CrossEntropyLoss()
     weights = [0.00132979]+[1]*48 # Downweighting the class 0 because it is ~94% of the classes
     class_weights = torch.FloatTensor(weights).to(device)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+#     loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    loss_fn = nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
     scaler = torch.cuda.amp.GradScaler()
 
