@@ -68,3 +68,7 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     cudnn.deterministic = True
+
+def print_log(message):
+    print(message)
+    logging.info(message)

@@ -8,7 +8,7 @@ import torch.nn as nn
 from tqdm import tqdm
 import logging
 
-class ClevrerSegmentationDataSet(Dataset):
+class ClevrerSegmentationTrainDataSet(Dataset):
     def __init__(self, video_dir, transform=None):
         self.transforms = transform
         self.images, self.masks = [], []
@@ -37,17 +37,46 @@ class ClevrerSegmentationDataSet(Dataset):
 
         return img, mask
 
+class ClevrerSegmentationFrameInferenceDataSet(Dataset):
+    def __init__(self, inference_frames_file, frames_to_predict, transform=None):
+        self.transforms = transform
+        self.data = torch.load(inference_frames_file)#[:,frames_to_predict,...]
+        self.data = self.data[:, frames_to_predict, :, :, :]
+        num_videos, num_frames_per_video, num_channels, height, width = self.data.shape
+        self.frames = self.data.view(num_videos * num_frames_per_video, num_channels, height, width)
+
+    def __len__(self):
+        return self.frames.shape[0]
+
+    def __getitem__(self, index):
+        frame = self.frames[index, ...]
+
+        if self.transforms is not None:
+            aug = self.transforms(image=img)
+            frame = aug['image']
+
+        return frame
+
+def get_frame_inference_dataloader(args):
+    inference_frames_file = args.inference_frames_file
+    batch_size = args.inference_batch_size
+    
+    inference_dataset = ClevrerSegmentationFrameInferenceDataSet(inference_frames_file, frames_to_predict=[-1], transform=None)
+    inference_dataloader = torch.utils.data.DataLoader(inference_dataset, batch_size=batch_size, shuffle=False)
+
+    return inference_dataloader
+
 def get_dataloaders(args):
     train_data_dir = args.train_data_dir
     val_data_dir = args.val_data_dir
     batch_size = args.batch_size
     
-    train_data_dir = [train_data_dir + f"/video_{i}" for i in range(0, 10)]
-    train_dataset = ClevrerSegmentationDataSet(train_data_dir, None)
+    train_data_dir = [train_data_dir + f"/video_{i}" for i in range(0, 1000)]
+    train_dataset = ClevrerSegmentationTrainDataSet(train_data_dir, None)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    val_data_dir = [val_data_dir + f"/video_{i}" for i in range(1000, 1010)]
-    val_dataset = ClevrerSegmentationDataSet(val_data_dir, None)
+    val_data_dir = [val_data_dir + f"/video_{i}" for i in range(1000, 2000)]
+    val_dataset = ClevrerSegmentationTrainDataSet(val_data_dir, None)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
     return train_dataloader, val_dataloader

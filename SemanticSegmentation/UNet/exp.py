@@ -61,7 +61,6 @@ class Exp:
         self.logger = logging.getLogger(__name__)
         self.logger.info('Logging Setup!')
 
-    
     def _build_model(self):
         args = self.args
         self.model = UNet(n_channels=3, n_classes=args.num_classes, bilinear=False)
@@ -92,8 +91,8 @@ class Exp:
         self.criterion = torch.nn.CrossEntropyLoss()
     
     def _save(self, name=''):
-        torch.save(self.model.state_dict(), os.path.join(
-            self.checkpoints_path, name + '.pth'))
+        model_save_path = os.path.join(self.checkpoints_path, name + '.pth')
+        torch.save(self.model.state_dict(), model_save_path)
     
     def _log_predicted_masks(self, key, image, pred_mask, true_mask):
         wandb.log(
@@ -115,6 +114,7 @@ class Exp:
             train_pbar = tqdm(self.train_dataloader)
 
             for idx, (batch_x, batch_y) in enumerate(train_pbar):
+                # print(batch_x.shape)
                 batch_x = batch_x.permute(0, 3, 1, 2).to(torch.float16).to(self.device)
                 self.optimizer.zero_grad()
                 batch_y = batch_y.to(torch.long).to(self.device)

@@ -8,153 +8,67 @@ import torch.nn as nn
 from torch.optim import Adam
 from tqdm import tqdm
 import argparse
-from unet import UNet
+
 import logging
 import wandb
+
+from src.dataset import get_dataloaders
+from src.unet import UNet
+from src.utils import check_accuracy
 
 def create_parser():
     parser = argparse.ArgumentParser()
     # Set-up parameters
     parser.add_argument('--device', default='cuda', type=str, help='Name of device to use for tensor computations (cuda/cpu)')
+    parser.add_argument('--res_dir', default='./results', type=str)
     parser.add_argument('--use_gpu', default=True, type=bool)
-    parser.add_argument('--num_classes', default=49, type=int)
+    parser.add_argument('--amp_enabled', default=True, type=bool)
     parser.add_argument('--gpu', default='0', type=str)
+    parser.add_argument('--seed', default=1, type=int)
+
+    # dataset parameters
+    parser.add_argument('--num_classes', default=49, type=int)
+    parser.add_argument('--batch_size', default=16, type=int, help='Batch size')
+    parser.add_argument('--val_batch_size', default=16, type=int, help='Batch size')
+    parser.add_argument('--train_data_dir', default='/scratch/sd5251/DL/Project/clevrer1/dataset/train', type=str)
+    parser.add_argument('--val_data_dir', default='/scratch/sd5251/DL/Project/clevrer1/dataset/val', type=str)
+    parser.add_argument('--dataname', default='clevrer', choices=['clevrer'])
+    parser.add_argument('--num_workers', default=8, type=int)
+
+    # Training parameters
+    parser.add_argument('--lr', default=5e-5, type=float, help='Learning Rate')
+    parser.add_argument('--log_step', default=1, type=int)
+    parser.add_argument('--epochs', default=15, type=int)
+    parser.add_argument('--weight_decay', default=1e-3, type=float)
+
+    # Model Parameters
+    parser.add_argument('--use_model_checkpoint', default=False, type=bool)
+    parser.add_argument('--model_checkpoint_file', default='checkpoint.pth', type=str)
 
     return parser
 
-class SegmentationDataSet(Dataset):
-
-    def __init__(self, video_dir, transform=None):
-        self.transforms = transform
-        self.images, self.masks = [], []
-        for i in video_dir:
-            imgs = os.listdir(i)
-            imgs_in_video_dir = [i + '/' + img for img in imgs if not img.startswith('mask')]
-            self.images.extend(np.random.choice(imgs_in_video_dir, 11))
-#            self.images.extend(imgs_in_video_dir)
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        img = np.array(Image.open(self.images[index]))
-        x = self.images[index].split('/')
-        image_name = x[-1]
-        mask_index = int(image_name.split("_")[1].split(".")[0])
-        x = x[:-1]
-        mask_path = '/'.join(x)
-        mask = np.load(mask_path + '/mask.npy')
-        mask = mask[mask_index, :, :]
-
-        if self.transforms is not None:
-            aug = self.transforms(image=img, mask=mask)
-            img = aug['image']
-            mask = aug['mask']
-
-        return img, mask
-
-def check_accuracy(loader, model):
-    num_correct = 0
-    num_pixels = 0
-    dice_score = 0
-    model.eval()
-    jaccard = torchmetrics.JaccardIndex(task="multiclass", num_classes=49).to(device)
-    # print(model)
-    y_preds_list = []
-    y_trues_list = []
-    #ious = []
-    with torch.no_grad():
-        for x, y in tqdm(loader):
-            x = x.permute(0, 3, 1, 2).type(torch.cuda.FloatTensor).to(device)
-            y = y.to(device)
-            softmax = nn.Softmax(dim=1)
-            preds = torch.argmax(softmax(model(x)), axis=1)
-
-            y_preds_list.append(preds)
-            y_trues_list.append(y)
-
-            num_correct += (preds == y).sum()
-            num_pixels += torch.numel(preds)
-
-            # thresholded_iou = batch_iou_pytorch(SMOOTH, preds, y)
-            # ious.append(thresholded_iou)
-            dice_score += (2 * (preds * y).sum()) / ((preds + y).sum() + 1e-8)
-
-            # print(dice_score)
-            # print(x.cpu()[0])
-            # break
-
-    # mean_thresholded_iou = sum(ious)/len(ious)
-
-    y_preds_concat = torch.cat(y_preds_list, dim=0)
-    y_trues_concat = torch.cat(y_trues_list, dim=0)
-    print("IoU over val: ", mean_thresholded_iou)
-
-    print(len(y_preds_list))
-    print(y_preds_concat.shape)
-
-    jac_idx = jaccard(y_trues_concat, y_preds_concat)
-
-    print(f"Jaccard Index {jac_idx}")
-
-    print(f"Got {num_correct}/{num_pixels} with acc {num_correct / num_pixels * 100:.2f}")
-    print(f"Dice score: {dice_score / len(loader)}")
 
 
-def batch_iou_pytorch(SMOOTH, outputs: torch.Tensor, labels: torch.Tensor):
-
-    intersection = (outputs & labels).float().sum((1, 2))  # Will be zero if Truth=0 or Prediction=0
-    union = (outputs | labels).float().sum((1, 2))  # Will be zzero if both are 0
-
-    iou = (intersection + SMOOTH) / (union + SMOOTH)  # We smooth our devision to avoid 0/0
-
-    thresholded = torch.clamp(20 * (iou - 0.5), 0, 10).ceil() / 10  # This is equal to comparing with thresolds
-
-    return thresholded  # Or thresholded.mean() if you are interested in average across the batch
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == "__main__":
     # hyperparameters
 
-    LEARNING_RATE = 5e-5
-    weight_decay = 1e-3
-    num_epochs = 15
     max_patience = 3
     epochs_no_improve = 0
     early_stop = False
     SMOOTH = 1e-6
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    cfg = {
-        "train": {
-            "learning_rate":LEARNING_RATE, 
-            "epochs":num_epochs, 
-            "weight_decay":weight_decay
-        }
-
-    }
+    args = create_parser().parse_args()
+    cfg = args.__dict__
 
     experiment = wandb.init(project='unet-seg', config=cfg)#, mode="disabled")
-    args = create_parser().parse_args()
-
-    train_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/train/video_' #Change this to your train set path
-    val_set_path = '/scratch/sd5251/DL/Project/clevrer1/dataset/val/video_' #Change this to your validation path
-#     unet_model_saved_path='./unet_10.pt'
-
-    train_data_dir = [train_set_path + str(i) for i in range(0, 1000)]
-    train_dataset = SegmentationDataSet(train_data_dir, None)
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
-
-    val_data_dir = [val_set_path + str(i) for i in range(1000, 2000)]
-    val_dataset = SegmentationDataSet(val_data_dir, None)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=16, shuffle=False)
+    
+    train_dataloader, val_dataloader = get_dataloaders(args)
+    
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     device = torch.device('cuda')
     print('Use GPU {}:'.format(args.gpu))
-
-    # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = UNet(n_channels=3, n_classes=args.num_classes, bilinear=False)
 #     model = model.to(memory_format=torch.channels_last)

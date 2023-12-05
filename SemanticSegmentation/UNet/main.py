@@ -13,8 +13,10 @@ import logging
 import wandb
 
 from src.dataset import get_dataloaders
+from src import unet
 from src.unet import UNet
 from exp import Exp
+from inference import Inference
 
 def create_parser():
     parser = argparse.ArgumentParser()
@@ -38,8 +40,15 @@ def create_parser():
     # Training parameters
     parser.add_argument('--lr', default=5e-5, type=float, help='Learning Rate')
     parser.add_argument('--log_step', default=1, type=int)
-    parser.add_argument('--epochs', default=15, type=int)
+    parser.add_argument('--epochs', default=20, type=int)
     parser.add_argument('--weight_decay', default=1e-3, type=float)
+
+    # Inference Parameters 
+    parser.add_argument('--inference', default=False, type=bool)
+    parser.add_argument('--inference_model_checkpoint', default="/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/SemanticSegmentation/UNet/checkpoints/unet_10.pt", type=str)
+    parser.add_argument('--inference_frames_file', default="/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/FramePrediction/SimVP/results/inference/simvp_basic.pt", type=str)
+    parser.add_argument('--inference_file_name', default="simvp_basic_worthy-breeze-62.pt", type=str)
+    parser.add_argument('--inference_batch_size', default=24, type=int, help='Inference Batch size')
 
     # Model Parameters
     parser.add_argument('--use_model_checkpoint', default=False, type=bool)
@@ -53,6 +62,16 @@ if __name__ == "__main__":
     args = create_parser().parse_args()
     cfg = args.__dict__
 
-    wandb_exp = wandb.init(project='unet-seg', config=cfg, mode="disabled")
-    exp = Exp(args, wandb_exp)
-    exp.train()
+    print(cfg)
+    if args.inference:
+        print('Starting Inference')
+        inf = Inference(args)
+        inf.run()
+        print('Inference Completed')
+    else:
+        print('Starting Training')
+        wandb_exp = wandb.init(project='unet-seg', config=cfg) #, mode="disabled")
+        exp = Exp(args, wandb_exp.name)
+        exp.train()
+        wandb.finish()
+        print('Training Completed')
