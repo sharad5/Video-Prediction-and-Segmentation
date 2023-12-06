@@ -84,7 +84,8 @@ class ClevrerInferenceDataSet(data.Dataset):
     def __getitem__(self, index):
         length = self.n_frames_input
         # print(self.videos[index])
-        video_folder = os.listdir(self.videos[index])
+        video_folder = [file for file in os.listdir(self.videos[index]) if file != "mask.npy"]
+        # print(video_folder)
         video_folder = sorted(video_folder, key=extract_image_num)
         imgs = []
         for image in video_folder:
@@ -105,7 +106,7 @@ class ClevrerInferenceDataSet(data.Dataset):
 
 def load_clevrer_inference_data(batch_size, data_root, num_workers):
     data = ClevrerInferenceDataSet(root=data_root, n_frames_input=11)
-    data_loader = DataLoader(data, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    data_loader = DataLoader(data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     return data_loader
 
 def load_clevrer(batch_size, val_batch_size,data_root, num_workers):

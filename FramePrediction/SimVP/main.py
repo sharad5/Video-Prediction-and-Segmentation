@@ -20,7 +20,7 @@ def create_parser():
     parser.add_argument('--inference', default=False, type=bool)
     parser.add_argument('--inference_model_checkpoint', default="results/Debug/checkpoint.pth", type=str)
     parser.add_argument('--inference_data_root', default="/scratch/sd5251/DL/Project/clevrer1/dataset/hidden", type=str)
-    parser.add_argument('--inference_file_name', default="simvp_basic.pt", type=str)
+    parser.add_argument('--inference_file_name', default="simvp_basic_hidden_set.pt", type=str)
     
     # dataset parameters
     parser.add_argument('--batch_size', default=4, type=int, help='Batch size')

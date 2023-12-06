@@ -71,7 +71,7 @@ class Inference:
 
     def _get_data(self):
         config = self.args.__dict__
-        config["data_root"] += "/hidden"
+#         config["data_root"] += "/hidden"
         config["inference"] = True
         self.data_loader = load_data(**config)
 
@@ -85,8 +85,8 @@ class Inference:
                 pred_y = self.model(batch_x)
 #                 print(pred_y.shape)
                 predicted_batches.append(pred_y)
-                if i==9:
-                    break
+                # if i==9:
+                #     break
         predictions = torch.cat(predicted_batches, dim=0)
         print(predictions.shape)
         folder_path = self.path+'/inference/'
