@@ -2,6 +2,7 @@ import os
 import logging
 import torch
 import random
+import torchmetrics
 import numpy as np
 import torch.backends.cudnn as cudnn
 

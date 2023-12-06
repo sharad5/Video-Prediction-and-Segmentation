@@ -45,7 +45,7 @@ def create_parser():
 
     # Inference Parameters 
     parser.add_argument('--inference', default=False, type=bool)
-    parser.add_argument('--inference_model_checkpoint', default="/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/SemanticSegmentation/UNet/checkpoints/unet_10.pt", type=str)
+    parser.add_argument('--inference_model_checkpoint', default="/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/SemanticSegmentation/UNet/results/checkpoints/legendary-forest-67_18.pth", type=str)
     parser.add_argument('--inference_frames_file', default="/scratch/sd5251/DL/Project/Video-Prediction-and-Segmentation/FramePrediction/SimVP/results/inference/simvp_basic.pt", type=str)
     parser.add_argument('--inference_file_name', default="simvp_basic_worthy-breeze-62.pt", type=str)
     parser.add_argument('--inference_batch_size', default=24, type=int, help='Inference Batch size')
