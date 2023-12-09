@@ -5,6 +5,7 @@ import torch
 import pickle
 import logging
 import numpy as np
+from collections import OrderedDict
 from model import SimVP
 from tqdm import tqdm
 from API import *
@@ -12,11 +13,12 @@ from utils import *
 import wandb
 
 class Exp:
-    def __init__(self, args, wandb_config):
+    def __init__(self, args, wandb_config, wandb_exp_name):
         super(Exp, self).__init__()
         self.args = args
         self.config = self.args.__dict__
         self.wandb_config = wandb_config
+        self.wandb_exp_name = wandb_exp_name
         self.device = self._acquire_device()
 
         self._preparation()
@@ -64,6 +66,12 @@ class Exp:
         self.model = SimVP(tuple(args.in_shape), args.hid_S,
                            args.hid_T, args.N_S, args.N_T)
         
+        if args.use_model_checkpoint and os.path.isfile(self.args.model_checkpoint_file):
+            state_dict = torch.load(self.args.model_checkpoint_file)
+            if "module" in list(state_dict.keys())[0]:
+                state_dict = OrderedDict({".".join(k.split(".")[1:]): v for k,v in state_dict.items()})
+            self.model.load_state_dict(state_dict)
+        
         if torch.cuda.device_count() > 1:
             self.model = torch.nn.DataParallel(self.model) #, device_ids=None will take in all available devices
             print(f"Using {torch.cuda.device_count()} GPUs!")
@@ -76,17 +84,23 @@ class Exp:
     def _get_data(self):
         config = self.args.__dict__
         self.train_loader, self.vali_loader, self.test_loader, self.data_mean, self.data_std = load_data(**config)
+        print(len(self.train_loader))
         #self.vali_loader = self.test_loader if self.vali_loader is None else self.vali_loader
 
     def _select_optimizer(self):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.wandb_config.lr)
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.optimizer, max_lr=self.wandb_config.lr, steps_per_epoch=len(self.train_loader), epochs=self.args.epochs)
+        if self.args.lr_scheduler == "one-cycle":
+            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=self.wandb_config.lr, steps_per_epoch=len(self.train_loader), epochs=self.args.epochs)
+        else:
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=3, gamma=0.9, verbose=True)
         return self.optimizer
 
     def _select_criterion(self):
-        self.criterion = torch.nn.MSELoss()
+        if self.args.use_weighted_mse:
+            self.criterion = WeightedMSELoss(num_frames=11, weight_scheme="harmonic", device=self.device)
+        else:
+            self.criterion = torch.nn.MSELoss()
 
     def _save(self, name=''):
         torch.save(self.model.state_dict(), os.path.join(
@@ -97,11 +111,11 @@ class Exp:
 
     def train(self, args):
         config = args.__dict__
-        best_model_path = self.path + '/' + 'checkpoint.pth' # load saved model to restart from previous best model (lowest val loss) checkpoint
+        # best_model_path = self.path + '/' + 'checkpoint.pth' # load saved model to restart from previous best model (lowest val loss) checkpoint
         
         recorder = Recorder(verbose=True)
-        if os.path.isfile(best_model_path):
-            self.model.load_state_dict(torch.load(best_model_path))
+        # if os.path.isfile(best_model_path):
+        #     self.model.load_state_dict(torch.load(best_model_path))
         for epoch in range(config['epochs']):
             train_loss = []
             self.model.train()
@@ -123,19 +137,19 @@ class Exp:
 
                 loss.backward()
                 self.optimizer.step()
-                self.scheduler.step()
                 count = count + 1
                 torch.cuda.empty_cache()
                 #if count == 50: 
                 #    break
             train_loss = np.average(train_loss)
+            self.scheduler.step()
 
             if epoch % args.log_step == 0:
                 with torch.no_grad():
                     vali_loss = self.vali(self.vali_loader)
                     torch.cuda.empty_cache()
                     #if epoch % (args.log_step * 100) == 0:
-                    self._save(name=str(epoch))
+                    self._save(name=f"{self.wandb_exp_name}_{epoch}.pth")
                 print_log("Epoch: {0} | Train Loss: {1:.4f} Vali Loss: {2:.4f}\n".format(
                     epoch + 1, train_loss, vali_loss))
                 recorder(vali_loss, self.model, self.path)

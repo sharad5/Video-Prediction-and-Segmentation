@@ -26,6 +26,7 @@ class ClevrerTrainDataSet(data.Dataset):
 
         for video in unlabelled_dirs:
             self.videos.extend([root + '/' + video + '/'])
+        # print(self.videos)
         
         self.length = len(self.videos)
 
