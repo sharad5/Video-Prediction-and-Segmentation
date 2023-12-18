@@ -11,37 +11,41 @@ import logging
 def extract_image_num(s):
     return int(s.split('_')[-1].split('.')[0])
 
+def image_filename_2_idx(filename):
+    return int(filename.split("_")[1].split(".")[0])
+
 class ClevrerSegmentationTrainDataSet(Dataset):
-    def __init__(self, video_dir, keep_last_only=False, transform=None):
+    def __init__(self, video_directory, keep_last_only=False, transform=None):
         self.transforms = transform
-        self.images, self.masks = [], []
-        for i in video_dir:
-            imgs = os.listdir(i)
-            imgs_in_video_dir = [i + '/' + img for img in imgs if not img.startswith('mask')]
-            imgs_in_video_dir = sorted(imgs_in_video_dir, key=extract_image_num)
-            # print(imgs_in_video_dir)
+        self.images = self._prepare_images(video_directory, keep_last_only)
+
+    def _prepare_images(self, video_directory, keep_last_only):
+        images = []
+        for directory in video_directory:
+            image_files = [f for f in os.listdir(directory) if not "mask" in f]
+            sorted_images = sorted(image_files, key=extract_image_num)
+            image_paths = [os.path.join(directory, img) for img in sorted_images]
+
             if keep_last_only:
-                self.images.append(imgs_in_video_dir[-1])
+                images.append(image_paths[-1])
             else:
-                self.images.extend(np.random.choice(imgs_in_video_dir, 11))
+                images.extend(image_paths)
+
+        return images
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, index):
         img = np.array(Image.open(self.images[index]))
-        x = self.images[index].split('/')
-        image_name = x[-1]
-        mask_index = int(image_name.split("_")[1].split(".")[0])
-        x = x[:-1]
-        mask_path = '/'.join(x)
-        mask = np.load(mask_path + '/mask.npy')
-        mask = mask[mask_index, :, :]
+        image_filename = self.images[index].split('/')[-1]
+        image_idx = image_filename_2_idx(image_filename)
+        video_path = '/'.join(self.images[index].split('/')[:-1])
+        mask = np.load(video_path + '/mask.npy')[image_idx, :, :]
 
         if self.transforms is not None:
-            aug = self.transforms(image=img, mask=mask)
-            img = aug['image']
-            mask = aug['mask']
+            # Only Image Transformations like Blur
+            img = self.transforms(img)
 
         return img, mask
 

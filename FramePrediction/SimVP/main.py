@@ -42,7 +42,7 @@ def create_parser():
     parser.add_argument('--epochs', default=99, type=int)
     parser.add_argument('--log_step', default=1, type=int)
     parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
-    parser.add_argument('--lr_scheduler', default="step", type=str, help='Learning rate Scheduler')
+    parser.add_argument('--lr_scheduler', default="one-cycle", type=str, help='Learning rate Scheduler')
     parser.add_argument('--use_weighted_mse', default=False, type=bool, help='MSE Weighted for frames of interest')
     parser.add_argument('--use_model_checkpoint', default=False, type=bool)
     parser.add_argument('--model_checkpoint_file', default="results/Debug/checkpoints/dashing-dew-9_23.pth.pth", type=str)

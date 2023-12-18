@@ -10,119 +10,83 @@ from torch.utils.data import random_split, Dataset, DataLoader
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-def extract_num(s):
+def extract_video_number(s):
     return int(s.split('_')[1])
 
-def extract_image_num(s):
+def extract_image_number(s):
     return int(s.split('_')[1].split('.')[0])
 
-class ClevrerTrainDataSet(data.Dataset):
-    def __init__(self, root, is_train=True, n_frames_input=11, n_frames_output=11, transform=None):
+class ClevrerTrainDataSet(Dataset):
+    def __init__(self, root_directory, is_training=True, input_frame_count=11, output_frame_count=11, transform=None):
         super(ClevrerTrainDataSet, self).__init__()
+        self.video_directories = self._load_video_directories(root_directory)
+        self.dataset_size = len(self.video_directories)
+        self.is_training = is_training
+        self.input_frame_count = input_frame_count
+        self.output_frame_count = output_frame_count
+        self.transformation = transform
 
-        self.videos = []
-        unlabelled_dirs = os.listdir(root)
-        unlabelled_dirs = sorted(unlabelled_dirs, key=extract_num)
+    def _load_video_directories(self, root_directory):
+        directory_names = sorted(os.listdir(root_directory), key=extract_video_number)
+        return [os.path.join(root_directory, dir_name, '') for dir_name in directory_names]
 
-        for video in unlabelled_dirs:
-            self.videos.extend([root + '/' + video + '/'])
-        
-        self.length = len(self.videos)
-
-        self.is_train = is_train
-
-        self.n_frames_input = n_frames_input
-        self.n_frames_output = n_frames_output
-        self.n_frames_total = self.n_frames_input + self.n_frames_output
-        self.transform = transform
-        # For generating data
-        self.mean = 0
-        self.std = 1
+    def _load_video_images(self, directory_path, frame_count):
+        image_filenames = sorted([file for file in os.listdir(directory_path) if file.endswith('.png')], key=extract_image_number)
+        images = [np.array(Image.open(os.path.join(directory_path, filename))) for filename in image_filenames[:frame_count]]
+        return images
 
     def __getitem__(self, index):
-        length = self.n_frames_input + self.n_frames_output
-        # print(self.videos[index])
-        video_folder = os.listdir(self.videos[index])
-        video_folder = sorted(video_folder, key=extract_image_num)
-        imgs = []
-        for image in video_folder:
-            imgs.append(np.array(Image.open(self.videos[index] + '/' + image)))
+        directory_path = self.video_directories[index]
+        initial_frames = self._load_video_images(directory_path, self.input_frame_count)
+        subsequent_frames = self._load_video_images(directory_path, self.output_frame_count)
 
-        #shape: torch.Size([10, 1, 64, 64])
-        # print(len(imgs))
+        tensor_initial_frames = torch.stack([torch.from_numpy(frame) for frame in initial_frames]).permute(0, 3, 1, 2)
+        tensor_subsequent_frames = torch.stack([torch.from_numpy(frame) for frame in subsequent_frames]).permute(0, 3, 1, 2)
 
-        past_clips = imgs[0:self.n_frames_input] #[11,160,240,3]
-        future_clips = imgs[-self.n_frames_output:] #[11,160,240,3]
- 
-        past_clips = [torch.from_numpy(clip) for clip in past_clips]
-        future_clips = [torch.from_numpy(clip) for clip in future_clips]
-        # stack the tensors and permute the dimensions
+        return tensor_initial_frames.contiguous().float(), tensor_subsequent_frames.contiguous().float()
 
-
-        past_clips = torch.stack(past_clips).permute(0, 3, 1, 2)
-        future_clips = torch.stack(future_clips).permute(0, 3, 1, 2)
-        #we want [11,3,160,240]
-        return (past_clips).contiguous().float(), (future_clips).contiguous().float()
     def __len__(self):
-        return self.length
+        return self.dataset_size
 
-class ClevrerInferenceDataSet(data.Dataset):
-    def __init__(self, root, n_frames_input=11, transform=None):
+
+class ClevrerInferenceDataSet(Dataset):
+    def __init__(self, root_directory, input_frame_count=11, transform=None):
         super(ClevrerInferenceDataSet, self).__init__()
+        self.video_directories = self._load_video_directories(root_directory)
+        self.dataset_size = len(self.video_directories)
+        self.input_frame_count = input_frame_count
+        self.transformation = transform
 
-        self.videos = []
-        unlabelled_dirs = os.listdir(root)
-        unlabelled_dirs = sorted(unlabelled_dirs, key=extract_num)
+    def _load_video_directories(self, root_directory):
+        directory_names = sorted(os.listdir(root_directory), key=extract_video_number)
+        return [os.path.join(root_directory, dir_name, '') for dir_name in directory_names]
 
-        for video in unlabelled_dirs:
-            self.videos.extend([root + '/' + video + '/'])
-        
-        self.length = len(self.videos)
-        self.n_frames_input = n_frames_input
-        self.transform = transform
+    def _load_video_images(self, directory_path, frame_count):
+        image_filenames = sorted([file for file in os.listdir(directory_path) if file.endswith('.png')], key=extract_image_number)
+        images = [np.array(Image.open(os.path.join(directory_path, filename))) for filename in image_filenames[:frame_count]]
+        return images
 
     def __getitem__(self, index):
-        length = self.n_frames_input
-        # print(self.videos[index])
-        video_folder = [file for file in os.listdir(self.videos[index]) if file != "mask.npy"]
-        # print(video_folder)
-        video_folder = sorted(video_folder, key=extract_image_num)
-        imgs = []
-        for image in video_folder:
-            imgs.append(np.array(Image.open(self.videos[index] + '/' + image)))
+        directory_path = self.video_directories[index]
+        initial_frames = self._load_video_images(directory_path, self.input_frame_count)
+        tensor_initial_frames = torch.stack([torch.from_numpy(frame) for frame in initial_frames]).permute(0, 3, 1, 2)
 
-        #shape: torch.Size([10, 1, 64, 64])
-        # print(len(imgs))
+        return tensor_initial_frames.contiguous().float()
 
-        past_clips = imgs[0:self.n_frames_input] #[11,160,240,3]
-
-        past_clips = [torch.from_numpy(clip) for clip in past_clips]
-        past_clips = torch.stack(past_clips).permute(0, 3, 1, 2)
-        #we want [11,3,160,240]
-        return (past_clips).contiguous().float()
-    
     def __len__(self):
-        return self.length
+        return self.dataset_size
 
 def load_clevrer_inference_data(batch_size, data_root, num_workers):
-    data = ClevrerInferenceDataSet(root=data_root, n_frames_input=11)
-    data_loader = DataLoader(data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-    return data_loader
+    inference_dataset = ClevrerInferenceDataSet(root_directory=data_root, input_frame_count=11)
+    inference_data_loader = DataLoader(inference_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    return inference_data_loader
 
-def load_clevrer(batch_size, val_batch_size,data_root, num_workers):
+def load_clevrer(batch_size, val_batch_size, data_root, num_workers):
+    training_dataset = ClevrerTrainDataSet(root_directory=data_root + "/unlabeled", is_training=True, input_frame_count=11, output_frame_count=11)
+    validation_dataset = ClevrerTrainDataSet(root_directory=data_root + "/val", is_training=False, input_frame_count=11, output_frame_count=11)
 
-    train_data = ClevrerTrainDataSet(root=data_root+"/unlabeled", is_train=True, n_frames_input=11, n_frames_output=11)
-    val_data = ClevrerTrainDataSet(root=data_root+"/val", is_train=False, n_frames_input=11, n_frames_output=11)
+    training_data_loader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    validation_data_loader = DataLoader(validation_dataset, batch_size=val_batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
-    # train_size = int(1 * len(whole_data))
-    # val_size = int(0.09 * len(whole_data))
-    # test_size = len(whole_data) - (train_size+val_size)
-    # print(train_size, val_size, test_size)
-    # train_data, val_data, test_data = random_split(whole_data, [train_size, val_size, test_size], generator=torch.Generator().manual_seed(2023))
-
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-    # test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-
-    mean, std = 0, 1
-    return train_loader, val_loader, mean, std
+    dataset_mean, dataset_std = 0, 1
+    return training_data_loader, validation_data_loader, dataset_mean, dataset_std

@@ -70,7 +70,7 @@ if __name__ == "__main__":
         print('Inference Completed')
     else:
         print('Starting Training')
-        wandb_exp = wandb.init(project='unet-seg', config=cfg) #, mode="disabled")
+        wandb_exp = wandb.init(project='unet-seg', config=cfg, mode="disabled")
         exp = Exp(args, wandb_exp.name)
         exp.train()
         wandb.finish()
