@@ -59,6 +59,7 @@ class Inference:
             if "module" in list(state_dict.keys())[0]:
                 state_dict = OrderedDict({".".join(k.split(".")[1:]): v for k,v in state_dict.items()})
             self.model.load_state_dict(state_dict)
+            print(f"Loaded Model from {self.args.inference_model_checkpoint}")
 
         if torch.cuda.device_count() > 1:
             self.model = torch.nn.DataParallel(self.model) #, device_ids=None will take in all available devices
