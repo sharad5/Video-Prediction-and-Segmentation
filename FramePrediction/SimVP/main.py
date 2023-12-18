@@ -26,7 +26,7 @@ def create_parser():
     # dataset parameters
     parser.add_argument('--batch_size', default=8, type=int, help='Batch size')
     parser.add_argument('--val_batch_size', default=8, type=int, help='Batch size')
-    parser.add_argument('--data_root', default='/scratch/sd5251/DL/Project/clevrer1/dataset/unlabeled')
+    parser.add_argument('--data_root', default='/scratch/sd5251/DL/Project/clevrer1/dataset')
     parser.add_argument('--dataname', default='clevrer', choices=['clevrer'])
     parser.add_argument('--num_workers', default=8, type=int)
 
@@ -39,13 +39,13 @@ def create_parser():
     parser.add_argument('--groups', default=4, type=int)
 
     # Training parameters
-    parser.add_argument('--epochs', default=3, type=int)
+    parser.add_argument('--epochs', default=99, type=int)
     parser.add_argument('--log_step', default=1, type=int)
-    parser.add_argument('--lr', default=1e-4, type=float, help='Learning rate')
-    parser.add_argument('--lr_scheduler', default="one-cycle", type=str, help='Learning rate Scheduler')
+    parser.add_argument('--lr', default=5e-4, type=float, help='Learning rate')
+    parser.add_argument('--lr_scheduler', default="step", type=str, help='Learning rate Scheduler')
     parser.add_argument('--use_weighted_mse', default=False, type=bool, help='MSE Weighted for frames of interest')
     parser.add_argument('--use_model_checkpoint', default=False, type=bool)
-    parser.add_argument('--model_checkpoint_file', default="results/Debug/checkpoints_old/19.pth", type=str)
+    parser.add_argument('--model_checkpoint_file', default="results/Debug/checkpoints/dashing-dew-9_23.pth.pth", type=str)
     return parser
 
 

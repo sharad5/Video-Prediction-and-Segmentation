@@ -78,14 +78,10 @@ class Exp:
         
         self.model.to(self.device)
 
-        # print(self.model.device_ids)
-
-
     def _get_data(self):
         config = self.args.__dict__
-        self.train_loader, self.vali_loader, self.test_loader, self.data_mean, self.data_std = load_data(**config)
+        self.train_loader, self.vali_loader, self.data_mean, self.data_std = load_data(**config)
         print(len(self.train_loader))
-        #self.vali_loader = self.test_loader if self.vali_loader is None else self.vali_loader
 
     def _select_optimizer(self):
         self.optimizer = torch.optim.Adam(
